@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Content
+	editable="true" width="100%"
+	xmlns="com.m.pyramid.controls.*"
+	xmlns:mx="http://www.adobe.com/2006/mxml"
+	creationComplete="controller.onCreationComplete();"
+	xmlns:controllers="com.m.pyramid.profile.controllers.*"
+	xmlns:components="com.m.pyramid.components.*"
+	>
+
+<mx:Script>
+	<![CDATA[
+		[Bindable]
+		public var stateColumnWidth:Number = 90;
+		[Bindable]
+		public var teamColumnWidth:Number = 120;
+		[Bindable]
+		public var sectorColumnWidth:Number = 315;
+		[Bindable]
+		public var leadColumnWidth:Number = 125;
+		[Bindable]
+		public var backupColumnWidth:Number = 125;
+		[Bindable]
+		public var removeColumnWidth:Number = 50;
+
+		public function onSectorGridResize():void
+		{
+			stateColumnWidth = stateColumn.width;
+			teamColumnWidth = teamColumn.width;
+			sectorColumnWidth = sectorColumn.width;
+			leadColumnWidth = leadColumn.width;
+			backupColumnWidth = backupColumn.width;
+			removeColumnWidth = removeColumn.width;
+		}
+
+	]]>
+</mx:Script>
+<controllers:ManageSectorController id="controller" dispatcher="{this}" view="{this}"/>
+
+<ActionControls>
+	<mx:Button id="saveBtn" label="Save" enabled="{controller.model.userHasMadeChanges}"/>
+	<!--mx:Button id="closeBtn" label="Close" /-->
+</ActionControls>
+
+<mx:VBox id="teamsVBox"  width="100%" height="100%">
+
+		<mx:HBox width="100%">
+			<mx:Label text="Line of Business:" paddingTop="3"/>
+			<mx:ComboBox alternatingItemColors="[#FFFFFF, #FFFFFF]" id="lineOfBusinessComboBox" paddingTop="0"/>
+			<mx:Label text="Line of Business MD: " paddingTop="3"/>
+			<mx:Label id="groupMDLbl" paddingTop="3" />
+		</mx:HBox>
+
+	<components:Section  height="100%" width="100%" title="Team Mapping" titleStyleName="mypanelTitle">
+
+	<!--mx:Panel styleName="portlet"
+		title="Team Mapping" height="100%" width="100%"
+		-->
+
+		<mx:AdvancedDataGrid id="sectorGrid"
+			variableRowHeight="true"
+			height="100%" width="100%"
+			editable="false"
+			folderOpenIcon="{null}" folderClosedIcon="{null}"
+			columnStretch="onSectorGridResize();"
+			sortExpertMode="true"
+
+
+			>
+
+			<mx:dataProvider>
+				<mx:HierarchicalData source="{this.controller.model.SSLIs}" childrenField="theSSLI" />
+			</mx:dataProvider>
+
+			<mx:columns>
+
+				<mx:AdvancedDataGridColumn  resizable="true" editable="false" sortable="false" width="15"/>
+				<mx:AdvancedDataGridColumn dataField="state" width="{stateColumnWidth}" id="stateColumn"
+					sortable="false" resizable="true">
+					<mx:headerRenderer>
+						<mx:Component>
+							<mx:HBox paddingBottom="0" paddingLeft="0" paddingRight="0" paddingTop="0" horizontalGap="0"
+								horizontalScrollPolicy="off" verticalScrollPolicy="off" >
+								<mx:Script>
+									<![CDATA[
+										import com.m.pyramid.profile.events.FindEmployeeEvent;
+									]]>
+								</mx:Script>
+								<mx:ComboBox alternatingItemColors="[#FFFFFF, #FFFFFF]" prompt="Expand" labelField="label" id="expandContractComboBox"
+									selectedIndex="{outerDocument.controller.model.newVar}" width="71" dropdownWidth="80"
+									enabled="{outerDocument.controller.model.sslisPopulated}"
+									valueCommit="outerDocument.controller.onExpandCollapse(event);"
+									>
+									<mx:ArrayCollection>
+										<mx:Object label = "Expand All" />
+										<mx:Object label = "Collapse All" />
+									</mx:ArrayCollection>
+								</mx:ComboBox>
+								<!--mx:Button label="{outerDocument.controller.model.expandedOrContracted}"
+									click="outerDocument.controller.onExpandClick(event)"
+									enabled="{outerDocument.controller.model.sslisPopulated}"/-->
+								<mx:Label text="State" />
+							</mx:HBox>
+						</mx:Component>
+					</mx:headerRenderer>
+				</mx:AdvancedDataGridColumn>
+
+				<mx:AdvancedDataGridColumn id="teamColumn" headerText="Team" width="{teamColumnWidth}" resizable="true" sortable="false"/>
+				<mx:AdvancedDataGridColumn id="sectorColumn" headerText="Sector" width="315" resizable="true" sortable="false"/>
+				<mx:AdvancedDataGridColumn id="leadColumn"  headerText="Lead Analyst" width="125" resizable="true" sortable="false"/>
+				<mx:AdvancedDataGridColumn id="backupColumn" headerText="Backup Analyst" width="125" resizable="true" sortable="false"/>
+				<mx:AdvancedDataGridColumn id="removeColumn" headerText="Remove"  width="50" sortable="false" editable="false" resizable="true" />
+
+			</mx:columns>
+
+			<mx:rendererProviders>
+  				<mx:AdvancedDataGridRendererProvider depth="2" columnIndex="1"
+  					renderer="com.m.pyramid.profile.views.StateSectorListRenderer" columnSpan="0" />
+  			</mx:rendererProviders>
+
+		</mx:AdvancedDataGrid>
+		</components:Section>
+	<!--/mx:Panel-->
+</mx:VBox>
+
+</Content>

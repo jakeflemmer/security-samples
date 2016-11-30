@@ -1,0 +1,340 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml"
+		xmlns="com.m.pyramid.components.*"
+		width="100%" height="100%" creationComplete="onCreationComplete();" xmlns:views="com.m.pyramid.profile.views.*">
+	<mx:Script>
+		<![CDATA[
+			import mx.collections.SortField;
+			import mx.collections.Sort;
+			import com.m.pyramid.profile.events.FindEmployeeEvent;
+			import mx.controls.Alert;
+	    	import mx.rpc.Fault;
+	    	import com.m.pyramid.model.SectorLeadAssignment;
+	    	import com.m.pyramid.application.NavigationEvent;
+	    	import com.m.pyramid.profile.viewmodels.FindEmployeeViewModel;
+	    	import com.m.pyramid.search.SearchEvent;
+	    	import mx.controls.List;
+	    	import com.m.pyramid.services.BusinessUnitTeamServiceProxy;
+	    	import mx.binding.utils.BindingUtils;
+	    	import mx.events.CollectionEvent;
+	    	import mx.events.DynamicEvent;
+	    	import com.m.pyramid.model.BusinessUnitTeamMember;
+	    	import com.m.pyramid.model.BusinessUnitTeam;
+	    	import mx.controls.Alert;
+	    	import mx.collections.ArrayCollection;
+	    	import com.m.pyramid.model.ReferenceObject;
+	    	import com.m.pyramid.components.SelfHierarchicalData;
+
+	    	[Bindable]
+	    	public var teamsArray:ArrayCollection = new ArrayCollection();
+
+	    	[Bindable]
+	    	public var statesArray:ArrayCollection;
+
+	    	[Bindable]
+	    	public var butsArray:ArrayCollection;		// BusinessUnitTeams
+
+	    	[Bindable]
+	    	public var sectorGroups:ArrayCollection;
+
+	    	[Bindable]
+	    	public var sectors:ArrayCollection;
+
+	    	[Bindable]
+	    	public var subSectors:ArrayCollection;
+
+
+	    	public var analystBeingChanged:Object;
+
+	    /*  serviceProxy methods
+	          StateSectorLeadInfo getStateSectorLeads(ReferenceObject state);
+
+        	  StateSectorLeadInfo updateStateSectorLeads(StateSectorLeadInfo info);
+		*/
+			override public function set data(value:Object):void
+			{
+				super.data = value;
+				if (data.leadAssignments == null || data.leadAssignments.length == 0)
+				{
+					sectorsGrid.rowCount = 1;
+					return;
+				}
+
+				sectorsGrid.rowCount = data.leadAssignments.length;
+
+			}
+
+	    	public function onCreationComplete():void
+	    	{
+	    		sectorsGrid.addEventListener("deleteRowFromCollection", onDeleteRow, false, 0, true);
+
+	    		butsArray = new ArrayCollection();
+	    		sectorGroups = new ArrayCollection();
+	    		sectors = new ArrayCollection();
+	    		subSectors = new ArrayCollection();
+	    		analystBeingChanged = new Object();
+	    		statesArray = new ArrayCollection;
+
+	    		statesArray = parentDocument.references.usStates;
+	    		sectors = parentDocument.references.sectors;
+
+	    		makeServiceCallToGetTeams();
+
+
+	    	}
+
+//	    	private function onServiceFailed(f:Fault):void
+//	    	{
+//	    		Alert.show("Error : " + f.faultString);
+//	    	}
+	    	private function makeServiceCallToGetTeams():void
+	    	{
+	    		var buts:BusinessUnitTeamServiceProxy = BusinessUnitTeamServiceProxy.getInstance();
+	    		var lobl:ArrayCollection = new ArrayCollection();
+	    		var grp:ReferenceObject = new ReferenceObject();
+	    		lobl = parentDocument.parentDocument.references.lineOfBusinessList;
+
+	    		for ( var j:uint = 0; j < lobl.length ; j++)
+        		{
+        			if ( lobl[j].code == "PFG")
+	        		{
+    	    			grp = lobl[j];
+        				break;
+        			}
+        		}
+	    		buts.getBusinessUnitTeams(grp.id ,onGotTeams);
+	    	}
+	    	private function onGotTeams(unfilteredList:ArrayCollection):void
+	    	{
+	    		var filteredList:ArrayCollection = new ArrayCollection();
+	    		for ( var i:uint=0; i < unfilteredList.length; i++)
+	    		{
+	    			if ( unfilteredList[i].status.code == "ACTIVE" && unfilteredList[i].teamType.code == "ANALYTICAL")
+	    			{
+	    				filteredList.addItem(unfilteredList[i]);
+	    			}
+	    		}
+	    		// sort into ascending order
+	    		var teamNamesAC:ArrayCollection = new ArrayCollection();
+	    		for ( var k:uint=0;k<filteredList.length;k++)
+	    		{
+	    			teamNamesAC.addItem(filteredList[k].teamInfo);
+	    		}
+	    		var sort:Sort = new Sort();
+				var sortField:SortField = new SortField("name",true);
+				sort.fields = [sortField];
+				teamNamesAC.sort = sort;
+				teamNamesAC.refresh();
+				var teamsCopy:ArrayCollection = new ArrayCollection();
+				teamsCopy.source = filteredList.source.slice();
+				for ( var j:uint = 0; j < filteredList.length; j++)
+				{
+					var position:int = teamNamesAC.getItemIndex(teamsCopy[j].teamInfo);
+					filteredList[position] = teamsCopy[j];
+				}
+	    		butsArray = filteredList;
+	    	}
+			public function findLeadAnalyst(sla:Object,event:Event=null):void
+			{
+				data.changesToSave = true;    // set property on StateSectorLeadInfo so that we know which to save
+				setUserHasMadeChangesFlag();
+				analystBeingChanged = sla;		// sla is SectorLeadAssignment
+				var viewmodel:FindEmployeeViewModel = new FindEmployeeViewModel();
+					viewmodel.enableTeamTypeSelection = false;
+				if(sla.team.label != null){
+					viewmodel.userProfileSearchCriteria.team = sla.team;
+				}else{
+					viewmodel.userProfileSearchCriteria.team = null;
+				}
+				viewmodel.allowMultipleSelection = false;
+				viewmodel.currentState = FindEmployeeViewModel.VIEW_STATE_SLAVE;
+				viewmodel.teamTypeSelectedCode = FindEmployeeEvent.TEAM_TYPE_CODE;
+				this.parentDocument.controller.model.currentlySelectedTeam = sla.team;
+				viewmodel.context = this.parentDocument.controller.model;
+				viewmodel.addEventListener(SearchEvent.CONTINUE, onChangeLeadAnalyst);
+				var navEvent:NavigationEvent = new NavigationEvent(NavigationEvent.OPENVIEW, viewmodel, sla.team);
+				parent.dispatchEvent(navEvent);
+			}
+			public function findBackupAnalyst(sla:Object,event:Event=null):void
+			{
+				data.changesToSave = true;    // set property on StateSectorLeadInfo so that we know which to save
+				setUserHasMadeChangesFlag();
+				analystBeingChanged = sla;		// sla is SectorLeadAssignment
+				var viewmodel:FindEmployeeViewModel = new FindEmployeeViewModel();
+					viewmodel.enableTeamTypeSelection = false;
+				if(sla.team.label != null){
+					viewmodel.userProfileSearchCriteria.team = sla.team;
+				}else{
+					viewmodel.userProfileSearchCriteria.team = null;
+				}
+				viewmodel.allowMultipleSelection = false;
+				viewmodel.currentState = FindEmployeeViewModel.VIEW_STATE_SLAVE;
+				viewmodel.teamTypeSelectedCode = FindEmployeeEvent.TEAM_TYPE_CODE;
+				this.parentDocument.controller.model.currentlySelectedTeam = sla.team;
+				viewmodel.context = this.parentDocument.controller.model;
+				viewmodel.addEventListener(SearchEvent.CONTINUE, onChangeBackupAnalyst);
+				var navEvent:NavigationEvent = new NavigationEvent(NavigationEvent.OPENVIEW, viewmodel, sla.team);
+				parent.dispatchEvent(navEvent);
+			}
+			private function onChangeLeadAnalyst(event:SearchEvent):void
+			{
+				for ( var i : uint = 0; i < parentDocument.controller.model.SSLIs.length ; i++)
+				{
+					for ( var j : uint = 0; j < parentDocument.controller.model.SSLIs[i].theSSLI[0].leadAssignments.length; j++)
+					{
+						if ( parentDocument.controller.model.SSLIs[i].theSSLI[0].leadAssignments[j] == analystBeingChanged)
+						{
+							parentDocument.controller.model.SSLIs[i].theSSLI[0].leadAssignments[j].leadAnalyst = event.results[0].user;
+						}
+					}
+				}
+			}
+			private function onChangeBackupAnalyst(event:SearchEvent):void
+			{
+				for ( var i : uint = 0; i < parentDocument.controller.model.SSLIs.length ; i++)
+				{
+					for ( var j : uint = 0; j < parentDocument.controller.model.SSLIs[i].theSSLI[0].leadAssignments.length; j++)
+					{
+						if ( parentDocument.controller.model.SSLIs[i].theSSLI[0].leadAssignments[j] == analystBeingChanged)
+						{
+							parentDocument.controller.model.SSLIs[i].theSSLI[0].leadAssignments[j].backupAnalyst = event.results[0].user;
+						}
+					}
+				}
+			}
+			public function onAddRowClick():void
+			{
+				data.changesToSave = true;    // set property on StateSectorLeadInfo so that we know which to save
+				setUserHasMadeChangesFlag();
+				var sla:SectorLeadAssignment = new SectorLeadAssignment();
+				data.leadAssignments.addItem(sla);
+				sectorsGrid.rowCount++;
+
+				sectorsGrid.invalidateDisplayList();
+				sectorsGrid.invalidateList();
+				sectorsGrid.invalidateProperties();
+				sectorsGrid.invalidateSize();
+				sectorsGrid.validateNow();
+			}
+			public function onDeleteRow(e:DynamicEvent):void
+			{
+				data.changesToSave = true;    // set property on StateSectorLeadInfo so that we know which to save
+				setUserHasMadeChangesFlag();
+				for ( var i:uint = 0; i < data.leadAssignments.length; i++)
+				{
+					if ( e.data == data.leadAssignments[i] )
+					{
+						data.leadAssignments.removeItemAt(i);
+					}
+				}
+				sectorsGrid.rowCount--;
+			}
+			public function onTeamComboBoxChange(d:Object , selectedItem:Object):void
+			{
+				data.changesToSave = true;    // set property on StateSectorLeadInfo so that we know which to save
+				setUserHasMadeChangesFlag();
+				if ( selectedItem == null)
+				{
+					d.team = new ReferenceObject();
+				} else {
+					d.team = selectedItem.teamInfo;
+				}
+			}
+			public function setUserHasMadeChangesFlag():void
+			{
+				parentDocument.controller.model.userHasMadeChanges = true;
+			}
+
+	    ]]>
+    </mx:Script>
+
+
+
+		 		<!-- data is [object] StateSectorLeadInfo -->
+
+
+
+
+	<mx:DataGrid id="sectorsGrid" width="100%" height="100%"
+		 dataProvider="{data.leadAssignments}"
+		 headerHeight="1"
+		 rowCount="1"
+		 >
+		<mx:columns>
+
+			<mx:DataGridColumn id="emptyColumn" width="{parentDocument.stateColumnWidth}" resizable="true"/>
+
+			<mx:DataGridColumn dataField="label" headerText=" " width="{parentDocument.teamColumnWidth}" resizable="true"  >
+				<mx:itemRenderer>
+					<mx:Component>
+						<mx:ComboBox alternatingItemColors="[#FFFFFF, #FFFFFF]" width="{parentDocument.teamColumnWidth}" dataProvider="{outerDocument.butsArray}"
+							labelField="teamInfo"
+							prompt="{data.team.code == null ? 'Select...' : data.team.name}"
+							change="outerDocument.onTeamComboBoxChange(data, selectedItem);"
+							enabled="{outerDocument.parentDocument.editable}"
+							/>
+					</mx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+
+			<mx:DataGridColumn	resizable="true" width="{parentDocument.sectorColumnWidth}">
+				<mx:itemRenderer>
+					<mx:Component>
+						<!--views:SectorListsComponent  /-->
+						<views:SectorSingleColumnComponent />
+					</mx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+
+
+			<mx:DataGridColumn  width="{parentDocument.leadColumnWidth}" resizable="true">
+				<mx:itemRenderer>
+					<mx:Component>
+						<mx:HBox horizontalScrollPolicy="off" horizontalGap="0">
+							<mx:Label text="{data.leadAnalyst.fullName}"
+								width="{outerDocument.parentDocument.leadColumnWidth - 20}"
+								/>
+							<mx:Button styleName="searchButton" buttonMode="true"
+								useHandCursor="{outerDocument.parentDocument.editable}" width="20"
+								enabled="{outerDocument.parentDocument.editable}"
+								click="outerDocument.findLeadAnalyst(data,event);"/>
+						</mx:HBox>
+
+					</mx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+
+			<mx:DataGridColumn   width="{parentDocument.backupColumnWidth}" resizable="true">
+				<mx:itemRenderer>
+ 					<mx:Component>
+ 						<mx:HBox horizontalScrollPolicy="off" horizontalGap="0">
+							<mx:Label text="{data.backupAnalyst.fullName}"
+								width="{outerDocument.parentDocument.backupColumnWidth - 20}"
+								/>
+							<mx:Button styleName="searchButton" buttonMode="true"
+								useHandCursor="{outerDocument.parentDocument.editable}" width="20"
+								enabled="{outerDocument.parentDocument.editable}"
+								click="outerDocument.findBackupAnalyst(data,event);" />
+						</mx:HBox>
+ 					</mx:Component>
+ 				</mx:itemRenderer>
+			</mx:DataGridColumn>
+
+			<mx:DataGridColumn width="{parentDocument.removeColumnWidth}" resizable="true">
+				<mx:itemRenderer>
+					<mx:Component>
+						<RemoveImageRenderer enabled="{outerDocument.parentDocument.editable}"
+							paddingLeft="16" paddingTop="5"/>
+					</mx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+
+
+		</mx:columns>
+	</mx:DataGrid>
+
+	<mx:HBox horizontalAlign="right" width="100%">
+		<mx:Button label="Add Row" click="onAddRowClick();"/>
+	</mx:HBox>
+
+</mx:VBox>

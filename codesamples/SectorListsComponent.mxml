@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml"
+		xmlns="com.m.pyramid.components.*"
+		width="100%" height="100%"
+		horizontalScrollPolicy="off"		>
+
+<mx:Script>
+	<![CDATA[
+		import mx.controls.Alert;
+		import mx.rpc.Fault;
+		import com.m.pyramid.model.ReferenceObject;
+		import mx.collections.ArrayCollection;
+
+	// =============================================
+	//  this . data = [Object] SectorLeadAssignment
+	// =============================================
+
+		[Bindable]
+		public var sectorGroupsAC : ArrayCollection;
+
+		[Bindable]
+		public var sectorsAC : ArrayCollection;
+
+		[Bindable]
+		public var subsectorsAC: ArrayCollection;
+
+		override public function set data(theData:Object):void
+		{
+			super.data = theData;
+
+			if ( theData == null ) return;
+
+			resetArrayCollections();
+
+			// if a sectorGroup has been chosen then populate sectors
+			// else   make prompt "Select..."
+			if ( theData.sectorGroup == null)
+			{
+				sectorGroupsComboBox.selectedIndex = -1;
+				sectorGroupsComboBox.prompt = "Select...";
+				sectorsComboBox.selectedIndex =-1;
+				sectorsComboBox.prompt = "Select...";
+				subsectorsComboBox.selectedIndex = -1;
+				subsectorsComboBox.prompt = "Select...";
+				return;
+			}else{
+				sectorGroupsComboBox.prompt = theData.sectorGroup.label;
+				populateSectors(theData.sectorGroup);
+			}
+
+			// if a sector has been chosen then populate subsectors
+			// else   make prompt "Select..."
+			if ( theData.sector == null )
+			{
+				sectorsComboBox.selectedIndex =-1;
+				sectorsComboBox.prompt = "Select...";
+				subsectorsComboBox.selectedIndex = -1;
+				subsectorsComboBox.prompt = "Select...";
+				return;
+			}else{
+				sectorsComboBox.prompt = theData.sector.label;
+				populateSubSectors(theData.sector);
+			}
+
+
+			// if a subsector has been chosen then show it
+			// else   make prompt "Select..."
+			if ( theData.subsector == null )
+			{
+				subsectorsComboBox.selectedIndex = -1;
+				subsectorsComboBox.prompt = "Select...";
+				return;
+			}else {
+				subsectorsComboBox.prompt = theData.subsector.label;
+			}
+		}
+		private function resetArrayCollections():void
+		{
+			sectorGroupsAC = new ArrayCollection();
+			sectorGroupsAC = parentDocument.parentDocument.references.sectorGroups;
+			sectorsAC = new ArrayCollection();
+			subsectorsAC = new ArrayCollection();
+		}
+
+		//=============================================
+		//  COMBO BOX CHANGE HANDLERS
+		//=============================================
+
+		private function onSectorGroupChange( e : Event ) : void
+		{
+			parentDocument.data.changesToSave = true;    // set property on StateSectorLeadInfo so that we know which to save
+			parentDocument.setUserHasMadeChangesFlag();			// parentDocument.data = StateSectorLeadInfo
+			data.sectorGroup = e.currentTarget.selectedItem;
+			data.sector = null;
+			data.subsector = null;
+			sectorsAC = new ArrayCollection();
+			subsectorsAC = new ArrayCollection();
+
+			populateSectors( e.currentTarget.selectedItem );
+		}
+		private function onSectorChange( e : Event ) : void
+		{
+			parentDocument.data.changesToSave = true;
+			parentDocument.setUserHasMadeChangesFlag();
+			data.sector = e.currentTarget.selectedItem;
+			data.subsector = null;
+			subsectorsAC = new ArrayCollection();
+
+			populateSubSectors( e.currentTarget.selectedItem );
+		}
+		private function onSubSectorChange( e : Event ) : void
+		{
+			parentDocument.data.changesToSave = true;
+			parentDocument.setUserHasMadeChangesFlag();
+			data.subsector = e.currentTarget.selectedItem;
+		}
+
+
+		//===========================================
+		// POPULATE SECTORS AND SUBSECTORS
+		//===========================================
+
+		private function populateSectors( sectGrp : Object ):void
+		{
+			var gsm : Object = parentDocument.parentDocument.references.groupSectorMap;
+			if(gsm.hasOwnProperty(sectGrp.code))
+        	{
+        		sectorsAC = gsm[sectGrp.code];
+        	}else{
+        		sectorsAC = new ArrayCollection();
+        	}
+		}
+		private function populateSubSectors( sect : Object ):void
+		{
+			var ssm : Object = parentDocument.parentDocument.references.subSectorMap;
+			if(ssm.hasOwnProperty(sect.code))
+        	{
+        		subsectorsAC = ssm[sect.code];
+        	}else{
+        		subsectorsAC = new ArrayCollection();
+        	}
+		}
+
+		//====================================
+		// SERVICE CALL HANDLERS
+		//====================================
+
+		private function onGotSectorGroups ( sectGrps : ArrayCollection ):void
+		{
+			sectorGroupsAC = sectGrps;
+		}
+		private function onGotSectors ( sects : ArrayCollection ):void
+		{
+			sectorsAC = sects;
+		}
+		private function onGotSubSectors ( subsects : ArrayCollection ):void
+		{
+			subsectorsAC = subsects;
+		}
+
+		private function onServiceFail( f:Fault ):void
+		{
+			Alert.show("Error ! : " + f.faultString);
+		}
+
+
+
+
+
+	]]>
+</mx:Script>
+
+<mx:HBox width="100%" height="100%" horizontalScrollPolicy="off">
+
+	<mx:ComboBox alternatingItemColors="[#FFFFFF, #FFFFFF]"
+		id="sectorGroupsComboBox"
+		width="100"
+		dataProvider="{sectorGroupsAC}"
+		labelField="name"
+		change="onSectorGroupChange(event);"
+ 		dropdownWidth="300"
+ 		enabled="true"
+		/>
+
+	<mx:ComboBox alternatingItemColors="[#FFFFFF, #FFFFFF]"
+		id="sectorsComboBox"
+		width="100"
+		dataProvider="{sectorsAC}"
+		labelField="name"
+		change="onSectorChange(event);"
+		dropdownWidth="300"
+		enabled="{sectorsAC.length > 0 ? true : false}"
+		/>
+
+	<mx:ComboBox alternatingItemColors="[#FFFFFF, #FFFFFF]"
+		id="subsectorsComboBox"
+		width="100"
+		dataProvider="{subsectorsAC}"
+		labelField="name"
+		change="onSubSectorChange(event);"
+		dropdownWidth="300"
+		enabled="{subsectorsAC.length > 0 ? true : false}"
+		/>
+
+</mx:HBox>
+
+
+
+</mx:VBox>

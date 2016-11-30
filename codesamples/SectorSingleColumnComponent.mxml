@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml"
+		xmlns="com.m.pyramid.components.*"
+		width="100%" height="100%"
+		horizontalScrollPolicy="off"		>
+
+<mx:Script>
+	<![CDATA[
+		import com.m.pyramid.model.SectorLeadAssignment;
+		import com.m.pyramid.components.label.StrikeLabel;
+		import mx.collections.SortField;
+		import mx.collections.Sort;
+		import mx.controls.Alert;
+		import mx.rpc.Fault;
+		import com.m.pyramid.model.ReferenceObject;
+		import mx.collections.ArrayCollection;
+
+	// =============================================
+	//  this . data = [Object] SectorLeadAssignment
+	// =============================================
+
+		[Bindable]
+		public var sectorGroupsAC : ArrayCollection;	//comes from view.references
+
+		[Bindable]
+		public var sectorsAC : ArrayCollection;
+
+		[Bindable]
+		public var subsectorsAC: ArrayCollection;
+
+		[Bindable]
+		public var oneColumnAC:ArrayCollection;
+
+
+
+		public var putInSectorCodeGetSectorGroupMap:Object = new Object();
+		public var putInSubSectorNameGetSubSectorMap:Object = new Object();
+
+		override public function set data(theData:Object):void
+		{
+			super.data = theData;
+			if ( theData == null ) return;
+
+			resetArrayCollections();
+
+			makeOneColumn();
+		}
+		private function resetArrayCollections():void
+		{
+			sectorGroupsAC = new ArrayCollection();
+			sectorGroupsAC = parentDocument.parentDocument.references.sectorGroups;
+			sectorsAC = new ArrayCollection();
+			subsectorsAC = new ArrayCollection();
+		}
+
+		private function makeOneColumn():void
+		{
+			oneColumnAC = new ArrayCollection();
+			var gsm : Object = parentDocument.parentDocument.references.groupSectorMap;
+			var ssm : Object = parentDocument.parentDocument.references.subSectorMap;
+			var alphaAC : ArrayCollection = sectorGroupsAC;      //comes from view.references
+
+			for ( var i:uint=0; i < alphaAC.length; i++)
+			{
+				var betaAC:ArrayCollection = new ArrayCollection();
+				betaAC = gsm[alphaAC[i].code];
+
+				for ( var j:uint=0; j < betaAC.length; j++)
+				{
+					putInSectorCodeGetSectorGroupMap[betaAC[j].code] = alphaAC[i];
+
+					var omegaAC:ArrayCollection = new ArrayCollection();
+
+
+					if(ssm.hasOwnProperty(betaAC[j].code))
+        			{
+        				omegaAC = ssm[betaAC[j].code];
+
+        				for ( var k:uint=0; k < omegaAC.length ; k++)
+        				{
+        					var concatItem:ReferenceObject = new ReferenceObject();
+        					concatItem.code = betaAC[j].code;
+        					concatItem.name = betaAC[j].name + ", " + omegaAC[k].name;
+        					oneColumnAC.addItem(concatItem);
+
+        					putInSubSectorNameGetSubSectorMap[concatItem.name] = omegaAC[k];
+        					if ( data.subsector != null && data.subsector.code != null)
+        					{
+        						if ( data.subsector.code == omegaAC[k].code )
+        						{
+        							sectorComboBox.selectedItem = concatItem;
+        						}
+        					}
+        				}
+        			} else {
+
+        				var concatItm:ReferenceObject = new ReferenceObject();
+        				concatItm =  betaAC[j];
+        				oneColumnAC.addItem(concatItm);
+        				if ( data.sector != null && data.sector.code != null)
+        				{
+        					if ( data.sector.code == betaAC[j].code )
+        					{
+        						sectorComboBox.selectedItem = concatItm;
+        					}
+        				}
+
+        			}
+
+				}
+			}
+			//puts into alphabetical order
+			var sort:Sort = new Sort();
+			var sf:SortField = new SortField("name",true,false);
+			sort.fields = [sf];
+			oneColumnAC.sort = sort;
+			oneColumnAC.refresh();
+
+//			for ( var z:uint=0; z<oneColumnAC.length;z++)
+//			{
+//				trace ( oneColumnAC[z]);
+//			}
+			//concatItm = alphaAC[i].name + ", " + betaAC[j].name;
+			//concatItem = alphaAC[i].name + ", " + betaAC[j].name + ", " + omegaAC[k].name;
+		}
+
+		private function onSectorComboBoxChange(e:Event):void
+		{
+			if (!e)return;
+			parentDocument.data.changesToSave = true;
+
+			parentDocument.parentDocument.controller.model.userHasMadeChanges = true;
+
+			var sectGrp:ReferenceObject;
+			var sect:ReferenceObject;
+			var subsect:ReferenceObject;
+
+			var n:String = e.currentTarget.selectedItem.name.toString();
+			var c:int = n.indexOf(",");
+
+			if( c > 0 ) // it has a subsector
+			{
+				sectGrp = putInSectorCodeGetSectorGroupMap[e.currentTarget.selectedItem.code];
+				sect = e.currentTarget.selectedItem;
+				subsect = putInSubSectorNameGetSubSectorMap[n];
+
+			} else {
+
+				sectGrp = putInSectorCodeGetSectorGroupMap[e.currentTarget.selectedItem.code];
+				sect = e.currentTarget.selectedItem;
+			}
+
+			data.sectorGroup = sectGrp;
+			data.sector = sect;
+			data.subsector = subsect;
+		}
+	]]>
+</mx:Script>
+
+	<mx:ComboBox alternatingItemColors="[#FFFFFF, #FFFFFF]"
+		id="sectorComboBox"
+		width="{parentDocument.parentDocument.sectorColumnWidth-5}"
+		enabled="{parentDocument.parentDocument.editable}"
+		dataProvider="{oneColumnAC}"
+		labelField="name"
+ 		rowCount="10"
+ 		prompt="Select..."
+ 		change="onSectorComboBoxChange(event);"
+ 		paddingRight="0"
+
+		/>
+
+
+
+<!--mx:HBox width="100%" height="100%" horizontalScrollPolicy="off">
+ 		dropdownWidth="100%"
+</mx:HBox-->
+
+
+
+</mx:VBox>
